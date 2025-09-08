@@ -1,22 +1,27 @@
-
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import cors from "cors";
-import bodyParser from "body-parser";
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json()); // body parser
 
 // ✅ MongoDB connection
+let mongoStatus = "❌ Not Connected";
 mongoose
   .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err.message));
+  .then(() => {
+    console.log("✅ MongoDB connected");
+    mongoStatus = "✅ Connected";
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    mongoStatus = "❌ Connection Failed: " + err.message;
+  });
 
 // ✅ Contact Schema & Model
 const contactSchema = new mongoose.Schema({
@@ -38,12 +43,14 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ✅ Test transporter connection (startup par check karega)
-transporter.verify((error, success) => {
+let emailStatus = "❌ Not Ready";
+transporter.verify((error) => {
   if (error) {
     console.error("❌ Email transporter error:", error);
+    emailStatus = "❌ Email Error: " + error.message;
   } else {
     console.log("✅ Email transporter is ready");
+    emailStatus = "✅ Ready";
   }
 });
 
@@ -56,7 +63,9 @@ app.post("/contact", async (req, res) => {
 
     if (!name || !email || !message) {
       console.warn("⚠️ Missing required fields");
-      return res.status(400).json({ success: false, message: "Name, Email, and Message are required." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Name, Email, and Message are required." });
     }
 
     // Save to DB
@@ -65,7 +74,7 @@ app.post("/contact", async (req, res) => {
     console.log("✅ Contact saved to DB:", newContact);
 
     // Send email
-    const mailOptions = {
+    await transporter.sendMail({
       from: `"Eflex Solution" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_USER,
       subject: "📩 New Contact Form Submission",
@@ -76,11 +85,9 @@ app.post("/contact", async (req, res) => {
         <p><b>Phone:</b> ${phone}</p>
         <p><b>Message:</b> ${message}</p>
       `,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
     console.log("✅ Email sent successfully");
-
     res.json({ success: true, message: "✅ Form submitted successfully!" });
   } catch (err) {
     console.error("❌ Error in /contact route:", err.stack || err);
@@ -88,17 +95,16 @@ app.post("/contact", async (req, res) => {
   }
 });
 
-// ✅ Health Route (Live Check)
+// ✅ Health Check Route
 app.get("/ping", (req, res) => {
   res.json({
     success: true,
     message: "🚀 Backend is live!",
-    mongo: mongoose.connection.readyState === 1 ? "✅ Connected" : "❌ Not Connected",
-    email: transporter ? "✅ Email Config Loaded" : "❌ Email Not Ready",
+    mongo: mongoStatus,
+    email: emailStatus,
   });
 });
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-

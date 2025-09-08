@@ -1,3 +1,4 @@
+
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -87,6 +88,17 @@ app.post("/contact", async (req, res) => {
   }
 });
 
+// ✅ Health Route (Live Check)
+app.get("/ping", (req, res) => {
+  res.json({
+    success: true,
+    message: "🚀 Backend is live!",
+    mongo: mongoose.connection.readyState === 1 ? "✅ Connected" : "❌ Not Connected",
+    email: transporter ? "✅ Email Config Loaded" : "❌ Email Not Ready",
+  });
+});
+
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
